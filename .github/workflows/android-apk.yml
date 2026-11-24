@@ -77,8 +77,7 @@ jobs:
           APP_ID="$(sed -nE 's/^[[:space:]]*applicationId = "([^"]+)".*/\1/p' android/app/build.gradle.kts | head -n 1)"
           VERSION_CODE="$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' android/app/build.gradle.kts | head -n 1)"
           VERSION_NAME="$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' android/app/build.gradle.kts | head -n 1)"
-          BADGING="$("$BUILD_TOOLS/aapt" dump badging "$APK" | head -n 1)"
-          echo "$BADGING"
+          BADGING="$("$BUILD_TOOLS/aapt" dump badging "$APK")"
           printf '%s\n' "$BADGING" | grep -F "package: name='$APP_ID' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'"
 
       - name: Upload signed APK
