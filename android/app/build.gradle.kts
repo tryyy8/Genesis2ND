@@ -30,13 +30,7 @@ android {
 
     buildTypes {
         getByName("release") {
-            // Bootstrap builds intentionally remain unsigned. Only the private Genesis
-            // signing workflow may attach the production signing identity.
-            signingConfig = if (System.getenv("GENESIS_KEYSTORE_PATH").isNullOrBlank()) {
-                null
-            } else {
-                signingConfigs.getByName("release")
-            }
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
         }
     }
