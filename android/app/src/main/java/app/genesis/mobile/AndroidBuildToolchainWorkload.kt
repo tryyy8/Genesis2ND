@@ -181,7 +181,7 @@ object AndroidBuildToolchainWorkload {
                 if (shouldStop()) throw IllegalStateException("WORKER_STOP_REQUESTED")
                 require(metadata.isFile && part.isFile) { "No Android toolchain transfer is active" }
                 val meta = JSONObject(metadata.readText())
-                require(part.length() == meta.getInt("totalBytes")) { "Android toolchain transfer is incomplete" }
+                require(part.length() == meta.getLong("totalBytes")) { "Android toolchain transfer is incomplete" }
                 require(digest(part) == meta.getString("sha256")) { "Android toolchain SHA-256 mismatch" }
                 val target = File(directory, "android.jar")
                 require(!target.exists() || target.delete()) { "Unable to replace prior Android toolchain" }
