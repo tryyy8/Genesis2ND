@@ -17,7 +17,7 @@ The workflow requires these repository Actions secrets, containing the exact exi
 
 Do not generate a replacement key for an in-place Genesis update. A different signing certificate will not update the already-installed Genesis app. These secrets are not committed to this repository and are never printed by the workflow.
 
-The workflow builds package `app.genesis.mobile` from the mirrored Android source and verifies the APK signature and package/version metadata before uploading an Actions artifact. Public standard GitHub-hosted runners are free; release/artifact visibility is public in this repository.
+The workflow builds package `app.genesis.mobile` from the mirrored Android source and verifies the APK signature, the existing Genesis signing certificate SHA-256 (`192c97906892db92736a3568726fcf7510145ef739e0a09a372d4e290f3b1f3b`), and package/version metadata before uploading an Actions artifact. Public standard GitHub-hosted runners are free; release/artifact visibility is public in this repository.
 
 ## Source synchronization
 
