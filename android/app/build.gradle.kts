@@ -30,7 +30,11 @@ android {
 
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (System.getenv("GENESIS_KEYSTORE_PATH").isNullOrBlank()) {
+                null
+            } else {
+                signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
         }
     }
