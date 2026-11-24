@@ -71,12 +71,17 @@ object AndroidBuildToolchainWorkload {
                 try {
                     connection.connectTimeout = 12000
                     connection.readTimeout = 25000
+                    // Byte ranges must address the exact stored archive representation.
+                    // HttpURLConnection may otherwise negotiate gzip transparently, which can
+                    // make Content-Range describe a different representation than the bytes read.
+                    connection.setRequestProperty("Accept-Encoding", "identity")
                     connection.setRequestProperty("Range", "bytes=$offset-${offset + count - 1}")
                     val code = connection.responseCode
                     require(code == 206) { "Google Android platform server did not honor the pinned byte range (HTTP $code)" }
                     val expectedRange = "bytes $offset-${offset + count - 1}/$ARCHIVE_BYTES"
-                    require(connection.getHeaderField("Content-Range") == expectedRange) {
-                        "Android platform download returned an unexpected byte range"
+                    val actualRange = connection.getHeaderField("Content-Range")?.trim()
+                    require(actualRange == expectedRange) {
+                        "Android platform download returned an unexpected byte range: expected $expectedRange, received ${actualRange ?: "<missing>"}"
                     }
                     val bytes = connection.inputStream.use { it.readBytes() }
                     require(bytes.size == count) { "Android platform download chunk length mismatch" }
