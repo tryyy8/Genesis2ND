@@ -10,7 +10,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -63,10 +63,20 @@ jobs:
           BADGING="$("$BUILD_TOOLS/aapt" dump badging "$APK")"
           printf '%s\n' "$BADGING" | grep -F "package: name='$APP_ID' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'"
 
-      - name: Upload unsigned APK
+      - name: Upload unsigned APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: genesis-unsigned-release-apk
           path: android/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Publish unsigned APK for private Genesis signing handoff
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: genesis-unsigned-${{ inputs.request_id }}
+          name: Genesis unsigned bootstrap ${{ inputs.request_id }}
+          prerelease: true
+          files: android/app/build/outputs/apk/release/app-release-unsigned.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
