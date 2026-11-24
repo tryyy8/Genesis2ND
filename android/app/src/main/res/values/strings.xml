@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Genesis</string>
+    <string name="genesis_accessibility_description">Observe the selected app during a user-started Genesis task session. With separate screen-owner consent, perform remote taps, swipes, Back, and Home for an approved Genesis screen-control session.</string>
+</resources>
