@@ -1,4 +1,4 @@
-name: Genesis Android APK (unsigned bootstrap)
+name: Genesis Android APK (temporary-signed bootstrap)
 run-name: Genesis2ND temporary-signed bootstrap build ${{ inputs.request_id }}
 
 on:
@@ -49,7 +49,6 @@ jobs:
 
       - name: Sign bootstrap APK with a one-time temporary identity
         run: |
-          set -euo pipefail
           set -euo pipefail
           UNSIGNED_APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
           APK="android/app/build/outputs/apk/release/app-release.apk"
