@@ -23,14 +23,18 @@ android {
         applicationId = "app.genesis.mobile"
         minSdk = 26
         targetSdk = 35
-        versionCode = 32
-        versionName = "0.4.19"
+        versionCode = 33
+        versionName = "0.4.20"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (System.getenv("GENESIS_KEYSTORE_PATH").isNullOrBlank()) {
+                null
+            } else {
+                signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
         }
     }

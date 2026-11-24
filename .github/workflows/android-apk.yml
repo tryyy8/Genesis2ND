@@ -1,5 +1,5 @@
-name: Genesis Android APK (public runner)
-run-name: Genesis2ND Android release ${{ inputs.request_id }}
+name: Genesis Android APK (temporary-signed bootstrap)
+run-name: Genesis2ND temporary-signed bootstrap build ${{ inputs.request_id }}
 
 on:
   workflow_dispatch:
@@ -10,11 +10,11 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
-    name: Build signed Genesis Android APK
+    name: Build temporarily signed Genesis bootstrap APK
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -43,49 +43,53 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Prepare existing Genesis signing identity
-        env:
-          GENESIS_KEYSTORE_BASE64: "${{ secrets.GENESIS_KEYSTORE_BASE64 }}"
-          GENESIS_KEYSTORE_PASSWORD: "${{ secrets.GENESIS_KEYSTORE_PASSWORD }}"
-          GENESIS_KEY_ALIAS: "${{ secrets.GENESIS_KEY_ALIAS }}"
-          GENESIS_KEY_PASSWORD: "${{ secrets.GENESIS_KEY_PASSWORD }}"
-        run: |
-          set -euo pipefail
-          test -n "$GENESIS_KEYSTORE_BASE64"
-          test -n "$GENESIS_KEYSTORE_PASSWORD"
-          test -n "$GENESIS_KEY_ALIAS"
-          test -n "$GENESIS_KEY_PASSWORD"
-          printf '%s' "$GENESIS_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/genesis-release.jks"
-          chmod 600 "$RUNNER_TEMP/genesis-release.jks"
-          keytool -list -keystore "$RUNNER_TEMP/genesis-release.jks" -storepass "$GENESIS_KEYSTORE_PASSWORD" -alias "$GENESIS_KEY_ALIAS" >/dev/null
-
-      - name: Run Android JVM unit tests and build signed release APK
-        env:
-          GENESIS_KEYSTORE_PATH: "${{ runner.temp }}/genesis-release.jks"
-          GENESIS_KEYSTORE_PASSWORD: "${{ secrets.GENESIS_KEYSTORE_PASSWORD }}"
-          GENESIS_KEY_ALIAS: "${{ secrets.GENESIS_KEY_ALIAS }}"
-          GENESIS_KEY_PASSWORD: "${{ secrets.GENESIS_KEY_PASSWORD }}"
+      - name: Run Android JVM unit tests and build unsigned release APK
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease
         working-directory: android
 
-      - name: Verify APK signature and package/version metadata
+      - name: Sign bootstrap APK with a one-time temporary identity
         run: |
           set -euo pipefail
+          UNSIGNED_APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
           APK="android/app/build/outputs/apk/release/app-release.apk"
           BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          test -s "$UNSIGNED_APK"
+          KEYSTORE="$RUNNER_TEMP/genesis-bootstrap-temporary.jks"
+          STORE_PASS="$(openssl rand -hex 24)"
+          KEY_PASS="$STORE_PASS"
+          keytool -genkeypair -noprompt -keystore "$KEYSTORE" -storepass "$STORE_PASS" \
+            -keypass "$KEY_PASS" -alias genesis-bootstrap-temporary -keyalg RSA -keysize 2048 \
+            -validity 2 -dname "CN=Genesis One-Time Bootstrap, OU=Temporary Install, O=Genesis"
+          chmod 600 "$KEYSTORE"
+          "$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-key-alias genesis-bootstrap-temporary \
+            --ks-pass "pass:$STORE_PASS" --key-pass "pass:$KEY_PASS" --out "$APK" "$UNSIGNED_APK"
+          "$BUILD_TOOLS/apksigner" verify --verbose "$APK"
           SIGNATURE_INFO="$("$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK")"
-          printf '%s\n' "$SIGNATURE_INFO"
-          printf '%s\n' "$SIGNATURE_INFO" | grep -F "Signer #1 certificate SHA-256 digest: 192c97906892db92736a3568726fcf7510145ef739e0a09a372d4e290f3b1f3b"
+          printf '%s\\n' "$SIGNATURE_INFO"
+          printf '%s\\n' "$SIGNATURE_INFO" | grep -F "Signer #1 certificate SHA-256 digest:"
+          rm -f "$KEYSTORE"
           APP_ID="$(sed -nE 's/^[[:space:]]*applicationId = "([^"]+)".*/\1/p' android/app/build.gradle.kts | head -n 1)"
           VERSION_CODE="$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' android/app/build.gradle.kts | head -n 1)"
           VERSION_NAME="$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' android/app/build.gradle.kts | head -n 1)"
           BADGING="$("$BUILD_TOOLS/aapt" dump badging "$APK")"
           printf '%s\n' "$BADGING" | grep -F "package: name='$APP_ID' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'"
 
-      - name: Upload signed APK
+      - name: Upload temporary-signed bootstrap APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: genesis-signed-release-apk
+          name: genesis-temporary-signed-bootstrap
           path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
+
+      - name: Publish temporary-signed bootstrap APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: genesis-bootstrap-${{ inputs.request_id }}
+          name: Genesis temporary-signed bootstrap ${{ inputs.request_id }}
+          prerelease: true
+          files: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/release/app-release-unsigned.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

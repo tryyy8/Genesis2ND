@@ -48,7 +48,7 @@ object AndroidBuildPackageWorkload {
     private fun chunk(type: Int, headerSize: Int, body: ByteArray): ByteArray {
         val bytes = ByteArrayOutputStream()
         val out = DataOutputStream(bytes)
-        le16(out, type); le16(out, headerSize); le32(out, headerSize + body.size); out.write(body); out.flush()
+        le16(out, type); le16(out, headerSize); le32(out, 8 + body.size); out.write(body); out.flush()
         return bytes.toByteArray()
     }
     private fun nodeBody(): Pair<ByteArrayOutputStream, DataOutputStream> {
