@@ -1,5 +1,5 @@
-name: Genesis Android APK (public runner)
-run-name: Genesis2ND Android release ${{ inputs.request_id }}
+name: Genesis Android APK (unsigned bootstrap)
+run-name: Genesis2ND unsigned Android build ${{ inputs.request_id }}
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    name: Build signed Genesis Android APK
+    name: Build unsigned Genesis Android APK
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -43,49 +43,30 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Prepare existing Genesis signing identity
-        env:
-          GENESIS_KEYSTORE_BASE64: "${{ secrets.GENESIS_KEYSTORE_BASE64 }}"
-          GENESIS_KEYSTORE_PASSWORD: "${{ secrets.GENESIS_KEYSTORE_PASSWORD }}"
-          GENESIS_KEY_ALIAS: "${{ secrets.GENESIS_KEY_ALIAS }}"
-          GENESIS_KEY_PASSWORD: "${{ secrets.GENESIS_KEY_PASSWORD }}"
-        run: |
-          set -euo pipefail
-          test -n "$GENESIS_KEYSTORE_BASE64"
-          test -n "$GENESIS_KEYSTORE_PASSWORD"
-          test -n "$GENESIS_KEY_ALIAS"
-          test -n "$GENESIS_KEY_PASSWORD"
-          printf '%s' "$GENESIS_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/genesis-release.jks"
-          chmod 600 "$RUNNER_TEMP/genesis-release.jks"
-          keytool -list -keystore "$RUNNER_TEMP/genesis-release.jks" -storepass "$GENESIS_KEYSTORE_PASSWORD" -alias "$GENESIS_KEY_ALIAS" >/dev/null
-
-      - name: Run Android JVM unit tests and build signed release APK
-        env:
-          GENESIS_KEYSTORE_PATH: "${{ runner.temp }}/genesis-release.jks"
-          GENESIS_KEYSTORE_PASSWORD: "${{ secrets.GENESIS_KEYSTORE_PASSWORD }}"
-          GENESIS_KEY_ALIAS: "${{ secrets.GENESIS_KEY_ALIAS }}"
-          GENESIS_KEY_PASSWORD: "${{ secrets.GENESIS_KEY_PASSWORD }}"
+      - name: Run Android JVM unit tests and build unsigned release APK
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease
         working-directory: android
 
-      - name: Verify APK signature and package/version metadata
+      - name: Verify APK is unsigned and package/version metadata is correct
         run: |
           set -euo pipefail
-          APK="android/app/build/outputs/apk/release/app-release.apk"
+          APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
           BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
-          SIGNATURE_INFO="$("$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK")"
-          printf '%s\n' "$SIGNATURE_INFO"
-          printf '%s\n' "$SIGNATURE_INFO" | grep -F "Signer #1 certificate SHA-256 digest: 192c97906892db92736a3568726fcf7510145ef739e0a09a372d4e290f3b1f3b"
+          test -s "$APK"
+          if "$BUILD_TOOLS/apksigner" verify "$APK" >/dev/null 2>&1; then
+            echo "Bootstrap APK unexpectedly contains a valid signature" >&2
+            exit 1
+          fi
           APP_ID="$(sed -nE 's/^[[:space:]]*applicationId = "([^"]+)".*/\1/p' android/app/build.gradle.kts | head -n 1)"
           VERSION_CODE="$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' android/app/build.gradle.kts | head -n 1)"
           VERSION_NAME="$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' android/app/build.gradle.kts | head -n 1)"
           BADGING="$("$BUILD_TOOLS/aapt" dump badging "$APK")"
           printf '%s\n' "$BADGING" | grep -F "package: name='$APP_ID' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'"
 
-      - name: Upload signed APK
+      - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: genesis-signed-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: genesis-unsigned-release-apk
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7
