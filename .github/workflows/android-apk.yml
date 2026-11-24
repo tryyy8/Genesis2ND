@@ -1,5 +1,5 @@
 name: Genesis Android APK (unsigned bootstrap)
-run-name: Genesis2ND unsigned Android build ${{ inputs.request_id }}
+run-name: Genesis2ND temporary-signed bootstrap build ${{ inputs.request_id }}
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build:
-    name: Build unsigned Genesis Android APK
+    name: Build temporarily signed Genesis bootstrap APK
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -47,36 +47,48 @@ jobs:
         run: gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease
         working-directory: android
 
-      - name: Verify APK is unsigned and package/version metadata is correct
+      - name: Sign bootstrap APK with a one-time temporary identity
         run: |
           set -euo pipefail
-          APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          set -euo pipefail
+          UNSIGNED_APK="android/app/build/outputs/apk/release/app-release-unsigned.apk"
+          APK="android/app/build/outputs/apk/release/app-release.apk"
           BUILD_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
-          test -s "$APK"
-          if "$BUILD_TOOLS/apksigner" verify "$APK" >/dev/null 2>&1; then
-            echo "Bootstrap APK unexpectedly contains a valid signature" >&2
-            exit 1
-          fi
+          test -s "$UNSIGNED_APK"
+          KEYSTORE="$RUNNER_TEMP/genesis-bootstrap-temporary.jks"
+          STORE_PASS="$(openssl rand -hex 24)"
+          KEY_PASS="$(openssl rand -hex 24)"
+          keytool -genkeypair -noprompt -keystore "$KEYSTORE" -storepass "$STORE_PASS" \
+            -keypass "$KEY_PASS" -alias genesis-bootstrap-temporary -keyalg RSA -keysize 2048 \
+            -validity 2 -dname "CN=Genesis One-Time Bootstrap, OU=Temporary Install, O=Genesis"
+          chmod 600 "$KEYSTORE"
+          "$BUILD_TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-key-alias genesis-bootstrap-temporary \
+            --ks-pass "pass:$STORE_PASS" --key-pass "pass:$KEY_PASS" --out "$APK" "$UNSIGNED_APK"
+          "$BUILD_TOOLS/apksigner" verify --verbose "$APK"
+          SIGNATURE_INFO="$("$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK")"
+          printf '%s\\n' "$SIGNATURE_INFO"
+          printf '%s\\n' "$SIGNATURE_INFO" | grep -F "Signer #1 certificate SHA-256 digest:"
+          rm -f "$KEYSTORE" "$UNSIGNED_APK"
           APP_ID="$(sed -nE 's/^[[:space:]]*applicationId = "([^"]+)".*/\1/p' android/app/build.gradle.kts | head -n 1)"
           VERSION_CODE="$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' android/app/build.gradle.kts | head -n 1)"
           VERSION_NAME="$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' android/app/build.gradle.kts | head -n 1)"
           BADGING="$("$BUILD_TOOLS/aapt" dump badging "$APK")"
           printf '%s\n' "$BADGING" | grep -F "package: name='$APP_ID' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'"
 
-      - name: Upload unsigned APK artifact
+      - name: Upload temporary-signed bootstrap APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: genesis-unsigned-release-apk
-          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          name: genesis-temporary-signed-bootstrap
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 7
 
-      - name: Publish unsigned APK for private Genesis signing handoff
+      - name: Publish temporary-signed bootstrap APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: genesis-unsigned-${{ inputs.request_id }}
-          name: Genesis unsigned bootstrap ${{ inputs.request_id }}
+          tag_name: genesis-bootstrap-${{ inputs.request_id }}
+          name: Genesis temporary-signed bootstrap ${{ inputs.request_id }}
           prerelease: true
-          files: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          files: android/app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
