@@ -56,7 +56,7 @@ jobs:
           test -s "$UNSIGNED_APK"
           KEYSTORE="$RUNNER_TEMP/genesis-bootstrap-temporary.jks"
           STORE_PASS="$(openssl rand -hex 24)"
-          KEY_PASS="$(openssl rand -hex 24)"
+          KEY_PASS="$STORE_PASS"
           keytool -genkeypair -noprompt -keystore "$KEYSTORE" -storepass "$STORE_PASS" \
             -keypass "$KEY_PASS" -alias genesis-bootstrap-temporary -keyalg RSA -keysize 2048 \
             -validity 2 -dname "CN=Genesis One-Time Bootstrap, OU=Temporary Install, O=Genesis"
